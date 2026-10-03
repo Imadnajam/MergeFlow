@@ -1,11 +1,46 @@
 import os
 import subprocess
 import sys
+import tempfile
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from pypdf import PdfReader, PdfWriter
+
+
+def merge_pdf_files(input_files: list[str], output_file: str) -> int:
+    """Merge input PDFs into output_file and return the total page count."""
+    output_path = Path(output_file).resolve()
+    source_paths = [Path(file_path).resolve() for file_path in input_files]
+    if output_path in source_paths:
+        raise ValueError(
+            "Le fichier de sortie doit être différent des fichiers source."
+        )
+
+    writer = PdfWriter()
+    temporary_path: Path | None = None
+    try:
+        total_pages = 0
+        for source_path in source_paths:
+            reader = PdfReader(source_path, strict=False)
+            total_pages += len(reader.pages)
+            writer.append(reader)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="wb", suffix=".pdf", dir=output_path.parent, delete=False
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+        with temporary_path.open("wb") as temporary_file:
+            writer.write(temporary_file)
+        os.replace(temporary_path, output_path)
+        temporary_path = None
+        return total_pages
+    finally:
+        writer.close()
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 class PdfMergerApp:
@@ -262,13 +297,14 @@ class PdfMergerApp:
             self.status_var.set("Enregistrement annulé.")
             return
 
-        writer = PdfWriter()
         try:
-            for file_path in self.pdf_files:
-                reader = PdfReader(file_path, strict=False)
-                writer.append(reader)
-            with open(output_path, "wb") as output_file:
-                writer.write(output_file)
+            page_count = merge_pdf_files(self.pdf_files, output_path)
+        except ValueError as error:
+            messagebox.showwarning("Destination invalide", str(error))
+            self.status_var.set(
+                "Choisissez une destination différente des fichiers source."
+            )
+            return
         except Exception as error:
             messagebox.showerror(
                 "Fusion impossible",
@@ -276,11 +312,11 @@ class PdfMergerApp:
             )
             self.status_var.set("Une erreur est survenue pendant la fusion.")
             return
-        finally:
-            writer.close()
 
         self.last_output = Path(output_path)
-        self.status_var.set(f"Fusion terminée : {self.last_output.name}")
+        self.status_var.set(
+            f"Fusion terminée : {self.last_output.name} ({page_count} pages)"
+        )
         self._update_buttons()
         messagebox.showinfo(
             "Fusion terminée",
