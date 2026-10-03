@@ -59,6 +59,7 @@ class PdfMergerApp:
 
         self._configure_style()
         self._build_interface()
+        self._bind_shortcuts()
         self._update_buttons()
 
     def _configure_style(self) -> None:
@@ -117,24 +118,27 @@ class PdfMergerApp:
 
         toolbar = ttk.Frame(card, style="Card.TFrame")
         toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 12))
-        ttk.Button(
+        self.add_button = ttk.Button(
             toolbar,
             text="Ajouter des PDF",
             style="Primary.TButton",
             command=self.add_pdfs,
-        ).pack(side="left")
-        ttk.Button(
+        )
+        self.add_button.pack(side="left")
+        self.remove_button = ttk.Button(
             toolbar,
             text="Supprimer",
             style="Action.TButton",
             command=self.remove_selected,
-        ).pack(side="left", padx=(10, 0))
-        ttk.Button(
+        )
+        self.remove_button.pack(side="left", padx=(10, 0))
+        self.clear_button = ttk.Button(
             toolbar,
             text="Vider la liste",
             style="Action.TButton",
             command=self.clear_list,
-        ).pack(side="left", padx=(10, 0))
+        )
+        self.clear_button.pack(side="left", padx=(10, 0))
 
         list_frame = ttk.Frame(card, style="Card.TFrame")
         list_frame.grid(row=1, column=0, sticky="nsew")
@@ -165,15 +169,17 @@ class PdfMergerApp:
 
         order_frame = ttk.Frame(card, style="Card.TFrame")
         order_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
-        ttk.Button(
+        self.move_up_button = ttk.Button(
             order_frame, text="Monter", style="Action.TButton", command=self.move_up
-        ).pack(side="left")
-        ttk.Button(
+        )
+        self.move_up_button.pack(side="left")
+        self.move_down_button = ttk.Button(
             order_frame,
             text="Descendre",
             style="Action.TButton",
             command=self.move_down,
-        ).pack(side="left", padx=(8, 0))
+        )
+        self.move_down_button.pack(side="left", padx=(8, 0))
         ttk.Label(
             order_frame,
             text="L’ordre affiché sera utilisé pour la fusion.",
@@ -201,26 +207,21 @@ class PdfMergerApp:
         )
         self.merge_button.grid(row=0, column=2)
 
+    def _bind_shortcuts(self) -> None:
+        self.root.bind("<Control-o>", lambda _event: self.add_pdfs())
+        self.root.bind("<Delete>", lambda _event: self.remove_selected())
+        self.root.bind("<Control-Up>", lambda _event: self.move_up())
+        self.root.bind("<Control-Down>", lambda _event: self.move_down())
+
     def _update_buttons(self) -> None:
         has_files = bool(self.pdf_files)
         has_selection = bool(self.file_list.curselection())
         self.merge_button.configure(state="normal" if has_files else "disabled")
         self.open_button.configure(state="normal" if self.last_output else "disabled")
-        for child in self.root.winfo_children():
-            self._update_button_tree(child, has_files, has_selection)
-
-    def _update_button_tree(
-        self, widget: tk.Misc, has_files: bool, has_selection: bool
-    ) -> None:
-        for child in widget.winfo_children():
-            if isinstance(child, ttk.Button):
-                if child.cget("text") == "Supprimer":
-                    child.configure(state="normal" if has_selection else "disabled")
-                elif child.cget("text") == "Vider la liste":
-                    child.configure(state="normal" if has_files else "disabled")
-                elif child.cget("text") in ("Monter", "Descendre"):
-                    child.configure(state="normal" if has_selection else "disabled")
-            self._update_button_tree(child, has_files, has_selection)
+        self.remove_button.configure(state="normal" if has_selection else "disabled")
+        self.clear_button.configure(state="normal" if has_files else "disabled")
+        self.move_up_button.configure(state="normal" if has_selection else "disabled")
+        self.move_down_button.configure(state="normal" if has_selection else "disabled")
 
     def add_pdfs(self) -> None:
         selected = filedialog.askopenfilenames(
@@ -232,6 +233,9 @@ class PdfMergerApp:
                 self.pdf_files.append(file_path)
                 self.file_list.insert(tk.END, Path(file_path).name)
         if selected:
+            self.file_list.selection_clear(0, tk.END)
+            self.file_list.selection_set(tk.END)
+            self.file_list.see(tk.END)
             self.last_output = None
             self.status_var.set(f"{len(self.pdf_files)} fichier(s) sélectionné(s).")
         self._update_buttons()
